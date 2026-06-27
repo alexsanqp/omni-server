@@ -46,6 +46,23 @@ logger = logging.getLogger(__name__)
 Image.MAX_IMAGE_PIXELS = None  # our OMNI_MAX_IMAGE_MP check is authoritative
 
 
+def configure_logging() -> None:
+    """Install the project's log format on the root logger unless one exists.
+
+    Called at import time so logs are formatted identically whether the server is
+    started via ``omni-server`` / ``python -m omni_server`` or by pointing
+    uvicorn/gunicorn straight at ``omni_server.main:app`` — the latter never runs
+    ``__main__`` and would otherwise drop the loader thread's INFO lines and
+    mangle its load-failure traceback. No-op if a handler is already configured
+    (e.g. an operator-supplied ``--log-config``).
+    """
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        )
+
+
 def _require_auth(settings: Settings, authorization: str | None) -> None:
     token = settings.auth_token
     if token is None:
@@ -175,7 +192,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=503, detail=f"pipeline failed to load: {state['error']}"
             )
 
-        image = _decode_image(settings, req.image_b64)
+        # Offload the CPU-bound base64 + raster decode off the event loop (like
+        # inference below), so a large screenshot's decode can't stall /health or
+        # other requests on the single worker. HTTPExceptions propagate unchanged.
+        image = await asyncio.to_thread(_decode_image, settings, req.image_b64)
 
         t0 = time.perf_counter()
         som_b64: str | None = None
@@ -202,4 +222,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
+configure_logging()
 app = create_app()

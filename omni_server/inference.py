@@ -96,7 +96,9 @@ class OmniParserPipeline:
 
         ``elements``: Element tuple with pixel-coord bboxes (xyxy).
         ``som_image_b64``: base64 PNG of the frame with numbered SoM boxes, ready
-        for Set-of-Marks prompting of a VLM (or None if nothing was detected).
+        for Set-of-Marks prompting of a VLM. Always a non-None string in real
+        inference — when nothing is detected it is the unannotated original frame
+        (only skeleton mode, which never calls this, emits None).
         """
         from util.utils import check_ocr_box, get_som_labeled_img
 

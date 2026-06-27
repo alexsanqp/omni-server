@@ -1,0 +1,14 @@
+# Keep the build context tiny: everything below is either regenerated inside
+# the image (uv venv, scripts/setup_vendor.py, runtime weights download) or
+# host-specific, so streaming it to the daemon on every build is pure waste.
+.venv/
+weights/
+vendor/
+.git/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.claude/

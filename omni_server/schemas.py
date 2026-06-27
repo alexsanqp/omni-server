@@ -36,7 +36,9 @@ class ParseResponse(BaseModel):
     som_image_b64: str | None = Field(
         default=None,
         description="Base64 PNG of the screenshot with numbered SoM boxes overlaid. "
-        "Designed for VLM consumption (Set-of-Marks prompting).",
+        "Designed for VLM consumption (Set-of-Marks prompting). Real inference always "
+        "returns a PNG (the unannotated frame when nothing is detected); null only in "
+        "skeleton mode.",
     )
 
 

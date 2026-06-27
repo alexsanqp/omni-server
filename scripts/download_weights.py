@@ -44,9 +44,16 @@ def main() -> int:
 
     icon_caption = WEIGHTS_DIR / "icon_caption"
     icon_caption_florence = WEIGHTS_DIR / "icon_caption_florence"
-    if icon_caption.is_dir() and not icon_caption_florence.exists():
-        print(f"Renaming {icon_caption.name} -> {icon_caption_florence.name}", flush=True)
-        shutil.move(str(icon_caption), str(icon_caption_florence))
+    # Idempotent: hf_hub_download re-materialises icon_caption/ on every run, so a
+    # second invocation must collapse it back to the single canonical dir rather
+    # than leave a stray ~500 MB icon_caption/ beside icon_caption_florence/.
+    if icon_caption.is_dir():
+        if icon_caption_florence.exists():
+            print(f"Removing redundant {icon_caption.name} (already renamed)", flush=True)
+            shutil.rmtree(icon_caption)
+        else:
+            print(f"Renaming {icon_caption.name} -> {icon_caption_florence.name}", flush=True)
+            shutil.move(str(icon_caption), str(icon_caption_florence))
 
     print("\nFinal layout:")
     for p in sorted(WEIGHTS_DIR.rglob("*")):

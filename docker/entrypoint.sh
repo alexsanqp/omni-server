@@ -12,8 +12,14 @@ if [ "${OMNI_REAL_MODEL:-1}" = "1" ]; then
     echo "[entrypoint] vendor missing — bootstrapping..."
     python3.12 scripts/setup_vendor.py
   fi
-  if [ ! -f "${OMNI_WEIGHTS_DIR:-/app/weights}/icon_detect/model.pt" ]; then
-    echo "[entrypoint] weights missing — downloading (~1 GB)..."
+  weights_dir="${OMNI_WEIGHTS_DIR:-/app/weights}"
+  yolo="${weights_dir}/icon_detect/model.pt"
+  florence="${weights_dir}/icon_caption_florence/model.safetensors"
+  # Gate on the LAST artifact (the renamed Florence-2 safetensors) as well as the
+  # YOLO model, so a first download interrupted between the two is repaired on the
+  # next start instead of leaving the pipeline permanently FileNotFoundError.
+  if [ ! -f "$yolo" ] || [ ! -f "$florence" ]; then
+    echo "[entrypoint] weights missing/incomplete — downloading (~1 GB)..."
     python3.12 scripts/download_weights.py
   fi
 fi

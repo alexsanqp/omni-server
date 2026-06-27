@@ -48,7 +48,10 @@ ENV OMNI_HOST=0.0.0.0 \
     OMNI_REAL_MODEL=1
 
 EXPOSE 8001
-HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=5 \
+# Generous start-period: a fresh-volume first boot downloads ~1 GB of weights +
+# HF models and then does a multi-minute model load + warmup before /health is
+# "ok"; a shorter grace window would flap the container to "unhealthy" meanwhile.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=600s --retries=5 \
     CMD curl -fsS "http://127.0.0.1:${OMNI_PORT}/health" | grep -q '"status":"ok"' || exit 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
