@@ -21,6 +21,10 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          # No uv.lock is committed (deps resolve from pyproject ranges), so key
+          # the cache on pyproject.toml. setup-uv's default glob is **/uv.lock,
+          # which matches nothing here and fails the step.
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Set up Python
         run: uv python install 3.12
