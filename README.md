@@ -31,7 +31,7 @@ client machine                         GPU machine
       "tags": ["icon","box_yolo_content_yolo"], "interactivity": true, "element_id": 42 }
   ],
   "parse_time_ms": 3700,
-  "som_image_b64": "<base64 png with numbered boxes, or null>"
+  "som_image_b64": "<base64 png with numbered boxes; null only in skeleton mode>"
 }
 ```
 `bbox` is `(left, top, right, bottom)` in **original-image pixels**.

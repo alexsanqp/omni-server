@@ -12,6 +12,7 @@ services:
       # Optional: a fresh clone has no .env (it is git-ignored). Every setting
       # has a default, and the essentials are set in `environment:` below, so the
       # documented `docker compose up` works with no .env present.
+      # NOTE: the path/required mapping form needs Docker Compose v2.24+ (Jan 2024).
       - path: .env
         required: false
     environment:

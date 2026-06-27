@@ -1,0 +1,6 @@
+# Shell scripts must stay LF even when checked out on Windows (autocrlf): a CRLF
+# entrypoint.sh breaks the Docker container (the `\r` corrupts the shebang and
+# line parsing). Keep the Dockerfile LF too for the same reason.
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker/entrypoint.sh text eol=lf

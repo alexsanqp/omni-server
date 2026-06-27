@@ -94,3 +94,15 @@ def test_auth_token_env_aliases(
     assert c.post("/parse", json={"image_b64": png_b64}).status_code == 401
     ok = c.post("/parse", json={"image_b64": png_b64}, headers={"Authorization": f"Bearer {TOKEN}"})
     assert ok.status_code == 200
+
+
+def test_blank_auth_token_env_leaves_parse_open(
+    monkeypatch: pytest.MonkeyPatch, png_b64: str
+) -> None:
+    # An empty OMNI_AUTH_TOKEN (the .env.example default, and what a compose
+    # env_file injects) must mean "no auth" — not a token of "" that 401s every
+    # request. Drives the real env path, which Settings(auth_token=None) bypasses.
+    monkeypatch.setenv("OMNI_REAL_MODEL", "0")
+    monkeypatch.setenv("OMNI_AUTH_TOKEN", "")
+    c = TestClient(create_app(Settings()))
+    assert c.post("/parse", json={"image_b64": png_b64}).status_code == 200
