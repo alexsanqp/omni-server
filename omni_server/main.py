@@ -71,17 +71,25 @@ def _decode_image(settings: Settings, image_b64: str) -> Image.Image:
         raise HTTPException(status_code=400, detail=f"invalid base64: {exc}") from exc
     if len(raw) > settings.max_image_bytes:
         raise HTTPException(status_code=413, detail="decoded image exceeds size limit")
+    # Parse the header first and enforce the megapixel cap *before* decoding the
+    # raster: image.load() allocates width*height*channels bytes, so a small-file
+    # / huge-canvas decompression bomb would OOM the box before any check that
+    # ran after it. With Pillow's own guard disabled above, this ordering is what
+    # makes OMNI_MAX_IMAGE_MP authoritative.
     try:
         image = Image.open(io.BytesIO(raw))
-        image.load()
-    except Exception as exc:  # any PIL failure is a bad-image 400
-        raise HTTPException(status_code=400, detail=f"invalid image: {exc}") from exc
+    except Exception as exc:  # unrecognized / unsupported format -> bad-image 400
+        raise HTTPException(status_code=400, detail="invalid image: unrecognized format") from exc
     megapixels = (image.width * image.height) / 1_000_000
     if megapixels > settings.max_image_megapixels:
         raise HTTPException(
             status_code=413,
             detail=f"image {megapixels:.1f}MP exceeds limit {settings.max_image_megapixels}MP",
         )
+    try:
+        image.load()  # decode now so truncated / corrupt pixel data fails as 400
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="invalid image: corrupt image data") from exc
     return image
 
 

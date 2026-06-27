@@ -38,6 +38,16 @@ def test_too_many_megapixels_is_413(make_png_b64) -> None:
     assert resp.status_code == 413
 
 
+def test_decompression_bomb_rejected_from_header(make_png_b64) -> None:
+    # A small-file / huge-canvas image (the classic decompression bomb) must be
+    # rejected from its header — before image.load() decodes the full raster into
+    # memory. 6000x6000 = 36 MP exceeds the default 20 MP cap.
+    settings = Settings(real_model=False, warmup=False)  # default 20.0 MP cap
+    c = TestClient(create_app(settings))
+    resp = c.post("/parse", json={"image_b64": make_png_b64(6000, 6000)})
+    assert resp.status_code == 413
+
+
 @pytest.mark.parametrize("missing", [{}, {"image_format": "png"}])
 def test_missing_image_b64_is_422(client: TestClient, missing: dict[str, str]) -> None:
     resp = client.post("/parse", json=missing)

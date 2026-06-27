@@ -9,7 +9,11 @@ services:
     ports:
       - "8001:8001"
     env_file:
-      - .env
+      # Optional: a fresh clone has no .env (it is git-ignored). Every setting
+      # has a default, and the essentials are set in `environment:` below, so the
+      # documented `docker compose up` works with no .env present.
+      - path: .env
+        required: false
     environment:
       OMNI_HOST: "0.0.0.0"
       OMNI_PORT: "8001"
