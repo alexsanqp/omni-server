@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from omni_server.config import Settings
-from omni_server.main import create_app
+from omni_server.main import _require_auth, create_app
 
 TOKEN = "s3cr3t-token"  # noqa: S105 - test fixture, not a real secret
 
@@ -38,6 +39,37 @@ def test_parse_rejects_wrong_token(auth_client: TestClient, png_b64: str) -> Non
         headers={"Authorization": "Bearer nope"},
     )
     assert resp.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        TOKEN,  # raw token, no "Bearer " prefix
+        f"bearer {TOKEN}",  # wrong case
+        "Bearer",  # no trailing space
+        "Bearer ",  # empty token after the prefix
+        f"Basic {TOKEN}",  # wrong scheme
+        f"Bearer  {TOKEN}",  # extra space -> leading-space token mismatch
+    ],
+)
+def test_parse_rejects_malformed_authorization(
+    auth_client: TestClient, png_b64: str, header: str
+) -> None:
+    # Only an exact ``Bearer <token>`` is accepted; everything else is 401.
+    resp = auth_client.post(
+        "/parse", json={"image_b64": png_b64}, headers={"Authorization": header}
+    )
+    assert resp.status_code == 401
+
+
+def test_require_auth_rejects_non_ascii_credential_as_401() -> None:
+    # A non-ASCII byte in the credential must surface as 401, not a TypeError ->
+    # 500 (hmac.compare_digest raises on non-ASCII *str* operands; the server
+    # compares on bytes). Driven directly: httpx blocks non-ASCII headers client-side.
+    settings = Settings(real_model=False, warmup=False, auth_token=TOKEN)
+    with pytest.raises(HTTPException) as exc_info:
+        _require_auth(settings, f"Bearer {TOKEN}\xe9")
+    assert exc_info.value.status_code == 401
 
 
 def test_health_open_without_token(auth_client: TestClient) -> None:

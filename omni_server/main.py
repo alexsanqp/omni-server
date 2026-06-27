@@ -27,11 +27,12 @@ import io
 import logging
 import threading
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from PIL import Image
 
 from omni_server import __version__
@@ -54,8 +55,10 @@ def _require_auth(settings: Settings, authorization: str | None) -> None:
     presented = (
         authorization[len(prefix) :] if authorization and authorization.startswith(prefix) else ""
     )
-    # Constant-time compare; reject empty/missing too.
-    if not presented or not hmac.compare_digest(presented, expected):
+    # Constant-time compare on UTF-8 bytes; reject empty/missing too. (Comparing
+    # str operands would raise TypeError on a non-ASCII credential byte and 500
+    # instead of cleanly returning 401; encoding to bytes never raises.)
+    if not presented or not hmac.compare_digest(presented.encode(), expected.encode()):
         raise HTTPException(status_code=401, detail="missing or invalid bearer token")
 
 
@@ -133,6 +136,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    @app.middleware("http")
+    async def _limit_body_size(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        # Reject oversized requests by Content-Length *before* the body is buffered
+        # into memory, so a giant POST can't OOM the box before the in-handler
+        # image_b64 cap runs. (A client that lies about Content-Length is the front
+        # proxy's job; this stops the common honest-but-huge case cheaply.)
+        cl = request.headers.get("content-length")
+        if cl is not None and cl.isdigit() and int(cl) > settings.max_image_bytes:
+            return JSONResponse(status_code=413, content={"detail": "request body too large"})
+        return await call_next(request)
+
     async def auth_dep(authorization: str | None = Header(default=None)) -> None:
         _require_auth(settings, authorization)
 
@@ -144,7 +160,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return HealthResponse(
             status=status,
             phase=phase,
-            detail=str(state["error"]) if state["error"] else None,
+            # /health is unauthenticated; a raw load-exception string can carry
+            # absolute paths / internals. Keep the full text in the logs (and on
+            # the auth-gated /parse 503); show anonymous probes only a generic note.
+            detail="pipeline failed to load; see server logs" if state["error"] else None,
         )
 
     @app.post("/parse", response_model=ParseResponse, dependencies=[Depends(auth_dep)])
