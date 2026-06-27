@@ -1,0 +1,136 @@
+diff --git a/util/utils.py b/util/utils.py
+index eb7c8b2..c610c20 100644
+--- a/util/utils.py
++++ b/util/utils.py
+@@ -8,27 +8,32 @@ import json
+ import requests
+ # utility function
+ import os
+-from openai import AzureOpenAI
++# PATCHED: removed eager `from openai import AzureOpenAI` (unused in this file).
+ 
+ import json
+ import sys
+ import os
+ import cv2
+ import numpy as np
+-# %matplotlib inline
+-from matplotlib import pyplot as plt
++# PATCHED: removed eager `from matplotlib import pyplot as plt` — only used when display_img=True (we pass display_img=False).
+ import easyocr
+-from paddleocr import PaddleOCR
+-reader = easyocr.Reader(['en'])
+-paddle_ocr = PaddleOCR(
+-    lang='en',  # other lang also available
+-    use_angle_cls=False,
+-    use_gpu=False,  # using cuda will conflict with pytorch in the same process
+-    show_log=False,
+-    max_batch_size=1024,
+-    use_dilation=True,  # improves accuracy
+-    det_db_score_mode='slow',  # improves accuracy
+-    rec_batch_num=1024)
++# PATCHED: removed eager `from paddleocr import PaddleOCR` and module-level
++# `paddle_ocr = PaddleOCR(...)` — PaddleOCR is lazy-initialised inside
++# check_ocr_box (we run with use_paddleocr=True).
++# PATCHED: EasyOCR reader is lazy too — the eager module-level Reader loaded
++# ~100MB of GPU models that the PaddleOCR path never uses.
++# When instantiated: verbose=False — original progress bar uses U+2588 which
++# crashes on Windows cp1251 stdout during first-time model download;
++# lang_list=['uk','en'] — original was ['en'] which romanized Cyrillic into
++# garbled labels on Ukrainian-language UIs.
++_easyocr_reader = None
++
++
++def _get_easyocr_reader():
++    global _easyocr_reader
++    if _easyocr_reader is None:
++        _easyocr_reader = easyocr.Reader(['uk', 'en'], verbose=False)
++    return _easyocr_reader
+ import time
+ import base64
+ 
+@@ -300,10 +305,11 @@ def remove_overlap_new(boxes, iou_threshold, ocr_bbox=None):
+                         else:
+                             continue
+                 if not box_added:
++                    # PATCHED: preserve 'conf' (YOLO confidence) on rebuilt dicts.
+                     if ocr_labels:
+-                        filtered_boxes.append({'type': 'icon', 'bbox': box1_elem['bbox'], 'interactivity': True, 'content': ocr_labels, 'source':'box_yolo_content_ocr'})
++                        filtered_boxes.append({'type': 'icon', 'bbox': box1_elem['bbox'], 'interactivity': True, 'content': ocr_labels, 'source':'box_yolo_content_ocr', 'conf': box1_elem.get('conf')})
+                     else:
+-                        filtered_boxes.append({'type': 'icon', 'bbox': box1_elem['bbox'], 'interactivity': True, 'content': None, 'source':'box_yolo_content_yolo'})
++                        filtered_boxes.append({'type': 'icon', 'bbox': box1_elem['bbox'], 'interactivity': True, 'content': None, 'source':'box_yolo_content_yolo', 'conf': box1_elem.get('conf')})
+             else:
+                 filtered_boxes.append(box1)
+     return filtered_boxes # torch.tensor(filtered_boxes)
+@@ -428,17 +434,28 @@ def get_som_labeled_img(image_source: Union[str, Image.Image], model=None, BOX_T
+         ocr_bbox = torch.tensor(ocr_bbox) / torch.Tensor([w, h, w, h])
+         ocr_bbox=ocr_bbox.tolist()
+     else:
++        # PATCHED: empty list, not None — zip(None, ...) crashed /parse on
++        # screenshots with no detected text (upstream MSFT bug).
+         print('no ocr bbox!!!')
+-        ocr_bbox = None
++        ocr_bbox = []
+ 
+-    ocr_bbox_elem = [{'type': 'text', 'bbox':box, 'interactivity':False, 'content':txt, 'source': 'box_ocr_content_ocr'} for box, txt in zip(ocr_bbox, ocr_text) if int_box_area(box, w, h) > 0] 
+-    xyxy_elem = [{'type': 'icon', 'bbox':box, 'interactivity':True, 'content':None} for box in xyxy.tolist() if int_box_area(box, w, h) > 0]
++    # PATCHED: carry per-box YOLO confidence ('conf') through the pipeline so
++    # the server can report honest per-element confidence instead of 1.0.
++    ocr_bbox_elem = [{'type': 'text', 'bbox':box, 'interactivity':False, 'content':txt, 'source': 'box_ocr_content_ocr'} for box, txt in zip(ocr_bbox, ocr_text) if int_box_area(box, w, h) > 0]
++    xyxy_elem = [{'type': 'icon', 'bbox':box, 'interactivity':True, 'content':None, 'conf': conf} for box, conf in zip(xyxy.tolist(), logits.tolist()) if int_box_area(box, w, h) > 0]
+     filtered_boxes = remove_overlap_new(boxes=xyxy_elem, iou_threshold=iou_threshold, ocr_bbox=ocr_bbox_elem)
+     
+     # sort the filtered_boxes so that the one with 'content': None is at the end, and get the index of the first 'content': None
+     filtered_boxes_elem = sorted(filtered_boxes, key=lambda x: x['content'] is None)
+     # get the index of the first 'content': None
+     starting_idx = next((i for i, box in enumerate(filtered_boxes_elem) if box['content'] is None), -1)
++    # PATCHED: empty-screen guard — zero detections produce a 0-dim tensor that
++    # crashes box_convert ("not enough values to unpack"). Return the original
++    # frame with no elements instead of 500-ing the whole /parse request.
++    if not filtered_boxes_elem:
++        buffered = io.BytesIO()
++        Image.fromarray(np.asarray(image_source)).save(buffered, format="PNG")
++        return base64.b64encode(buffered.getvalue()).decode('ascii'), {}, []
+     filtered_boxes = torch.tensor([box['bbox'] for box in filtered_boxes_elem])
+     print('len(filtered_boxes):', len(filtered_boxes), starting_idx)
+ 
+@@ -514,13 +531,36 @@ def check_ocr_box(image_source: Union[str, Image.Image], display_img = True, out
+             text_threshold = 0.5
+         else:
+             text_threshold = easyocr_args['text_threshold']
+-        result = paddle_ocr.ocr(image_np, cls=False)[0]
++        # PATCHED: lazy init paddle_ocr (was module-level, removed by our patch above).
++        global _paddle_ocr_instance
++        try:
++            _paddle_ocr_instance
++        except NameError:
++            from paddleocr import PaddleOCR
++            # PATCHED: lang='cyrillic' covers UK/RU/BE; original was 'en' which
++            # romanized Cyrillic on Ukrainian YouTube UI.
++            _paddle_ocr_instance = PaddleOCR(
++                lang='cyrillic',
++                use_angle_cls=False,
++                use_gpu=False,
++                show_log=False,
++                max_batch_size=1024,
++                use_dilation=True,
++                det_db_score_mode='slow',
++                rec_batch_num=1024,
++            )
++        result = _paddle_ocr_instance.ocr(image_np, cls=False)[0]
++        # PATCHED: PaddleOCR 2.x returns [None] when no text is detected —
++        # without this guard a text-free screenshot (video fullscreen, image-
++        # heavy page) crashes the whole /parse request with a TypeError.
++        if result is None:
++            result = []
+         coord = [item[0] for item in result if item[1][1] > text_threshold]
+         text = [item[1][0] for item in result if item[1][1] > text_threshold]
+     else:  # EasyOCR
+         if easyocr_args is None:
+             easyocr_args = {}
+-        result = reader.readtext(image_np, **easyocr_args)
++        result = _get_easyocr_reader().readtext(image_np, **easyocr_args)
+         coord = [item[0] for item in result]
+         text = [item[1] for item in result]
+     if display_img:

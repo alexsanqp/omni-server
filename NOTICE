@@ -1,0 +1,34 @@
+omni-server
+===========
+
+This service wraps third-party components that are NOT covered by this repo's
+MIT LICENSE and are NOT redistributed here — they are fetched at setup time by
+`scripts/setup_vendor.py` (source) and `scripts/download_weights.py` (weights).
+You are responsible for complying with their terms.
+
+1. Microsoft OmniParser (source code)
+   - https://github.com/microsoft/OmniParser  (pinned at commit b0d5c9f)
+   - Vendored into `vendor/OmniParser`; we import `util/utils.py` (patched, see
+     `patches/`) and `util/box_annotator.py`.
+   - Upstream code license: MIT (see the upstream repo's LICENSE for the
+     authoritative, current terms).
+
+2. OmniParser v2 model weights
+   - https://huggingface.co/microsoft/OmniParser-v2.0
+   - `icon_detect/` — a YOLO-based icon detector. YOLO/Ultralytics-derived
+     weights are commonly distributed under AGPL-3.0; review the model card
+     before any commercial/closed deployment.
+   - `icon_caption_florence/` — a Florence-2-based caption model (MIT-family).
+   - Confirm the exact license on the model card; terms can change.
+
+3. Florence-2 processor / base
+   - https://huggingface.co/microsoft/Florence-2-base
+   - Fetched by `transformers` at first model load (tokenizer + remote modeling
+     code, `trust_remote_code=True`).
+
+4. OCR engines: PaddleOCR (Apache-2.0), EasyOCR (Apache-2.0).
+
+Because the icon-detector weights may be AGPL-licensed, treat the *running
+service* accordingly if you expose it as a network service to third parties.
+For an internal, single-operator deployment this is typically fine; verify for
+your situation.

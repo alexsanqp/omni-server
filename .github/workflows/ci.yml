@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Lint + skeleton tests (no GPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # CI runs the wire contract only — no torch, no weights.
+      OMNI_REAL_MODEL: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies (base + dev, no gpu)
+        run: uv sync --extra dev
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Type-check (mypy)
+        run: uv run mypy omni_server
+
+      - name: Tests (skeleton mode)
+        run: uv run pytest
