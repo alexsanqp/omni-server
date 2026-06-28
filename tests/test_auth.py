@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from omni_server.config import Settings
-from omni_server.main import _require_auth, create_app
+from omni_server.main import _require_auth
 
 TOKEN = "s3cr3t-token"  # noqa: S105 - test fixture, not a real secret
 
 
 @pytest.fixture
-def auth_client() -> TestClient:
-    settings = Settings(real_model=False, warmup=False, auth_token=TOKEN)
-    return TestClient(create_app(settings))
+def auth_client(ready_client: Any) -> TestClient:
+    return ready_client(Settings(warmup=False, auth_token=TOKEN))
 
 
 def test_parse_requires_token_when_configured(auth_client: TestClient, png_b64: str) -> None:
@@ -66,7 +67,7 @@ def test_require_auth_rejects_non_ascii_credential_as_401() -> None:
     # A non-ASCII byte in the credential must surface as 401, not a TypeError ->
     # 500 (hmac.compare_digest raises on non-ASCII *str* operands; the server
     # compares on bytes). Driven directly: httpx blocks non-ASCII headers client-side.
-    settings = Settings(real_model=False, warmup=False, auth_token=TOKEN)
+    settings = Settings(warmup=False, auth_token=TOKEN)
     with pytest.raises(HTTPException) as exc_info:
         _require_auth(settings, f"Bearer {TOKEN}\xe9")
     assert exc_info.value.status_code == 401
@@ -84,25 +85,23 @@ def test_parse_open_when_token_unset(client: TestClient, png_b64: str) -> None:
 
 @pytest.mark.parametrize("env_name", ["OMNI_AUTH_TOKEN", "OMNIPARSER_AUTH_TOKEN"])
 def test_auth_token_env_aliases(
-    monkeypatch: pytest.MonkeyPatch, png_b64: str, env_name: str
+    monkeypatch: pytest.MonkeyPatch, ready_client: Any, png_b64: str, env_name: str
 ) -> None:
     # Both the canonical name and the OMNIPARSER_* alias must enable auth, so a
     # value shared with the YouTube client lines up either way.
-    monkeypatch.setenv("OMNI_REAL_MODEL", "0")
     monkeypatch.setenv(env_name, TOKEN)
-    c = TestClient(create_app(Settings()))
+    c = ready_client(Settings())
     assert c.post("/parse", json={"image_b64": png_b64}).status_code == 401
     ok = c.post("/parse", json={"image_b64": png_b64}, headers={"Authorization": f"Bearer {TOKEN}"})
     assert ok.status_code == 200
 
 
 def test_blank_auth_token_env_leaves_parse_open(
-    monkeypatch: pytest.MonkeyPatch, png_b64: str
+    monkeypatch: pytest.MonkeyPatch, ready_client: Any, png_b64: str
 ) -> None:
     # An empty OMNI_AUTH_TOKEN (the .env.example default, and what a compose
     # env_file injects) must mean "no auth" — not a token of "" that 401s every
     # request. Drives the real env path, which Settings(auth_token=None) bypasses.
-    monkeypatch.setenv("OMNI_REAL_MODEL", "0")
     monkeypatch.setenv("OMNI_AUTH_TOKEN", "")
-    c = TestClient(create_app(Settings()))
+    c = ready_client(Settings())
     assert c.post("/parse", json={"image_b64": png_b64}).status_code == 200

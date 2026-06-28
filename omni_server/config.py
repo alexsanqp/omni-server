@@ -1,9 +1,9 @@
 """Server settings, loaded from environment / ``.env``.
 
-All knobs are env-driven so the same image runs on the GPU box, in CI
-(skeleton mode), or on a CPU dev laptop without code changes. ``OMNI_*`` is the
-canonical prefix; the two original ``OMNIPARSER_*`` names are still accepted for
-back-compat with the in-repo service this was extracted from.
+All knobs are env-driven so the same image runs on the GPU box and in CI without
+code changes. ``OMNI_*`` is the canonical prefix; the original ``OMNIPARSER_*``
+names are still accepted for back-compat with the in-repo service this was
+extracted from.
 """
 
 from __future__ import annotations
@@ -26,19 +26,12 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
-        # Accept both the field name (e.g. real_model=, used by tests) and the
-        # env aliases (OMNI_REAL_MODEL / OMNIPARSER_REAL_MODEL).
+        # Accept both the field name (e.g. warmup=, auth_token=, used by tests)
+        # and the OMNI_* / OMNIPARSER_* env aliases.
         populate_by_name=True,
     )
 
     # --- Modes -------------------------------------------------------------
-    # real_model=True loads the GPU pipeline (torch + YOLO + Florence-2). False
-    # serves a canned skeleton response — used by CI and no-GPU smoke tests so
-    # the wire contract can be exercised without 3+ GB of CUDA wheels.
-    real_model: bool = Field(
-        default=True,
-        validation_alias=AliasChoices("OMNI_REAL_MODEL", "OMNIPARSER_REAL_MODEL"),
-    )
     # Pay the lazy OCR/model init with one warmup parse at startup instead of on
     # the first real request (which would otherwise blow the client timeout).
     warmup: bool = Field(

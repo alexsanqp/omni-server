@@ -1,4 +1,4 @@
-"""Health endpoint in skeleton mode."""
+"""Health endpoint with a ready (injected) pipeline."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ def test_health_ok(client: TestClient) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    assert body["phase"] == "1-skeleton"
+    assert body["phase"] == "2-inference"
     assert body["detail"] is None
 
 

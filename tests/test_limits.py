@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import base64
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 from omni_server.config import Settings
-from omni_server.main import create_app
 
 
 def test_invalid_base64_is_400(client: TestClient) -> None:
@@ -22,28 +22,25 @@ def test_non_image_bytes_is_400(client: TestClient) -> None:
     assert resp.status_code == 400
 
 
-def test_oversized_body_is_413() -> None:
-    settings = Settings(real_model=False, warmup=False, max_image_bytes=1024)
-    c = TestClient(create_app(settings))
+def test_oversized_body_is_413(ready_client: Any) -> None:
+    c = ready_client(Settings(warmup=False, max_image_bytes=1024))
     big = base64.b64encode(b"x" * 4096).decode()
     resp = c.post("/parse", json={"image_b64": big})
     assert resp.status_code == 413
 
 
-def test_too_many_megapixels_is_413(make_png_b64) -> None:
-    settings = Settings(real_model=False, warmup=False, max_image_megapixels=0.001)
-    c = TestClient(create_app(settings))
+def test_too_many_megapixels_is_413(ready_client: Any, make_png_b64: Any) -> None:
+    c = ready_client(Settings(warmup=False, max_image_megapixels=0.001))
     # 64x48 = 3072 px = 0.003 MP > 0.001 MP limit.
     resp = c.post("/parse", json={"image_b64": make_png_b64(64, 48)})
     assert resp.status_code == 413
 
 
-def test_decompression_bomb_rejected_from_header(make_png_b64) -> None:
+def test_decompression_bomb_rejected_from_header(ready_client: Any, make_png_b64: Any) -> None:
     # A small-file / huge-canvas image (the classic decompression bomb) must be
     # rejected from its header — before image.load() decodes the full raster into
     # memory. 6000x6000 = 36 MP exceeds the default 20 MP cap.
-    settings = Settings(real_model=False, warmup=False)  # default 20.0 MP cap
-    c = TestClient(create_app(settings))
+    c = ready_client(Settings(warmup=False))  # default 20.0 MP cap
     resp = c.post("/parse", json={"image_b64": make_png_b64(6000, 6000)})
     assert resp.status_code == 413
 

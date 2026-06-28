@@ -1,7 +1,7 @@
 """Standalone smoke client for a running omni-server.
 
-Posts an image to ``/parse`` and prints the parsed elements. Works against both
-skeleton and real-inference modes. Depends only on the stdlib + Pillow.
+Posts an image to ``/parse`` and prints the parsed elements. Depends only on the
+stdlib + Pillow.
 
 Usage::
 

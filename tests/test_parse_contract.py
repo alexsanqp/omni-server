@@ -1,4 +1,8 @@
-"""/parse wire contract in skeleton mode (canned element, no GPU)."""
+"""/parse wire contract, exercised against an injected ready fake pipeline.
+
+The fake (conftest.FakePipeline) returns one known Element so these assertions
+pin the Element/ParseResponse serialization a downstream client mirrors.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +20,7 @@ def _jpeg_b64(width: int = 64, height: int = 48, color: str = "white") -> str:
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-def test_parse_returns_canned_element(client: TestClient, png_b64: str) -> None:
+def test_parse_returns_elements(client: TestClient, png_b64: str) -> None:
     resp = client.post("/parse", json={"image_b64": png_b64, "image_format": "png"})
     assert resp.status_code == 200
     body = resp.json()
@@ -24,12 +28,12 @@ def test_parse_returns_canned_element(client: TestClient, png_b64: str) -> None:
     assert body["som_image_b64"] is None
     assert len(body["elements"]) == 1
     el = body["elements"][0]
-    assert el["label"] == "placeholder-button"
-    assert el["bbox"] == [20.0, 30.0, 220.0, 80.0]
+    assert el["label"] == "button"
+    assert el["bbox"] == [20.0, 30.0, 220.0, 80.0]  # tuple -> JSON array
     assert 0.0 <= el["confidence"] <= 1.0
-    # Optional phase-2 fields carry their documented defaults.
-    assert el["interactivity"] is False
-    assert el["element_id"] == -1
+    assert el["tags"] == ["button", "fake"]
+    assert el["interactivity"] is True
+    assert el["element_id"] == 0
 
 
 def test_parse_defaults_image_format(client: TestClient, png_b64: str) -> None:

@@ -8,12 +8,10 @@ on:
 
 jobs:
   test:
-    name: Lint + skeleton tests (no GPU)
+    name: Lint + tests (no GPU)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      # CI runs the wire contract only — no torch, no weights.
-      OMNI_REAL_MODEL: "0"
+    # Tests inject a fake pipeline, so the wire contract runs with no torch/weights.
     steps:
       - uses: actions/checkout@v4
 
@@ -41,5 +39,5 @@ jobs:
       - name: Type-check (mypy)
         run: uv run mypy omni_server
 
-      - name: Tests (skeleton mode)
+      - name: Tests (fake pipeline, no GPU)
         run: uv run pytest

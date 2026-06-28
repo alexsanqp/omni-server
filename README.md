@@ -31,7 +31,7 @@ client machine                         GPU machine
       "tags": ["icon","box_yolo_content_yolo"], "interactivity": true, "element_id": 42 }
   ],
   "parse_time_ms": 3700,
-  "som_image_b64": "<base64 png with numbered boxes; null only in skeleton mode>"
+  "som_image_b64": "<base64 png with numbered boxes>"
 }
 ```
 `bbox` is `(left, top, right, bottom)` in **original-image pixels**.
@@ -44,18 +44,18 @@ Auth: if `OMNI_AUTH_TOKEN` is set, `/parse` requires `Authorization: Bearer <tok
 (`/health` stays open). Requests are bounded by `OMNI_MAX_IMAGE_BYTES` /
 `OMNI_MAX_IMAGE_MP`.
 
-## Quick start (no GPU — skeleton mode)
+## Quick start (no GPU): run the checks
 
-Exercises the wire contract with a canned response; no torch/weights needed.
+Lint, type-check, and the wire-contract tests need no torch/weights — the suite
+injects a fake pipeline, so there is no canned "skeleton" mode baked into the
+service itself.
 
 ```bash
 uv sync --extra dev
-OMNI_REAL_MODEL=0 uv run omni-server          # serves on :8001
-curl -s localhost:8001/health                  # {"status":"ok","phase":"1-skeleton",...}
-uv run python scripts/smoke_client.py          # posts a test image
-# against a remote box (and with auth):
-OMNI_URL=http://gpu-host:8001 OMNI_AUTH_TOKEN=<token> uv run python scripts/smoke_client.py shot.png
+uv run ruff check . && uv run mypy omni_server && uv run pytest
 ```
+
+Actually serving real parses needs a GPU box — see **Full deploy** below.
 
 ## Full deploy (GPU box)
 
@@ -76,8 +76,10 @@ uv run python scripts/setup_vendor.py
 # 3. Model weights (~1 GB from HuggingFace):
 uv run python scripts/download_weights.py
 # 4. Run (real inference):
-OMNI_REAL_MODEL=1 uv run omni-server
+uv run omni-server
 # /health reports "loading" until the model is up, then "ok".
+# 5. Smoke-test it (locally, or against a remote box with OMNI_URL / OMNI_AUTH_TOKEN):
+uv run python scripts/smoke_client.py shot.png
 ```
 
 First cold start fetches the Florence-2 *processor* from HuggingFace
@@ -86,20 +88,22 @@ persistent dir to cache them across restarts. Subsequent starts are offline.
 
 ## Configuration
 
-All settings are env-driven (`omni_server/config.py`); see `.env.example`. The
-most important ones:
+All settings are env-driven (`omni_server/config.py`). Copy `.env.example` to
+`.env` and edit it — the server auto-loads `.env` from its working directory, so
+a plain `uv run omni-server` picks up your config with no extra flags. The most
+important keys:
 
 | Env | Default | Meaning |
 |---|---|---|
-| `OMNI_REAL_MODEL` | `1` | `0` = skeleton (no GPU) |
 | `OMNI_HOST` / `OMNI_PORT` | `0.0.0.0` / `8001` | bind address |
 | `OMNI_AUTH_TOKEN` | _(unset)_ | bearer token for `/parse` |
 | `OMNI_WARMUP` | `1` | warmup parse at startup |
 | `OMNI_MAX_IMAGE_BYTES` | `24 MiB` | request body cap |
 | `OMNI_MAX_IMAGE_MP` | `20.0` | max resolution |
+| `OMNI_BATCH_SIZE` | `64` | Florence-2 caption batch (lower it on an 8 GB GPU) |
 | `OMNI_VENDOR_REF` | `b0d5c9f` | pinned upstream OmniParser SHA |
 
-`OMNIPARSER_REAL_MODEL` / `OMNIPARSER_WARMUP` are still accepted as aliases.
+`OMNIPARSER_WARMUP` / `OMNIPARSER_AUTH_TOKEN` are still accepted as aliases.
 
 ## Networking (two machines)
 
@@ -129,7 +133,7 @@ token). Note: real parses take seconds — the client's timeout must allow for i
 omni_server/      package: config, schemas (wire), inference, main (FastAPI)
 scripts/          download_weights, setup_vendor, smoke_client
 patches/          UTF-8 patch + README for the vendored OmniParser
-tests/            skeleton-mode tests (run in CI, no GPU)
+tests/            wire-contract tests (fake pipeline injected; run in CI, no GPU)
 Dockerfile        GPU image     docker-compose.yml  GPU deploy
 ```
 

@@ -66,7 +66,7 @@ def fake_vendor(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 def _pipeline() -> OmniParserPipeline:
     obj = OmniParserPipeline.__new__(OmniParserPipeline)
-    obj._s = Settings(real_model=False, warmup=False)
+    obj._s = Settings(warmup=False)
     obj._lock = Lock()
     obj.yolo = None
     obj.caption = None
