@@ -19,6 +19,9 @@ __pycache__/
 *.bin
 *.safetensors
 
+# --- HuggingFace cache (when HF_HOME points into the repo) ---
+/.hfcache/
+
 # --- Local artifacts ---
 smoke_som.png
 spike-phase-2-results.md

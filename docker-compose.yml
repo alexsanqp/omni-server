@@ -18,7 +18,6 @@ services:
     environment:
       OMNI_HOST: "0.0.0.0"
       OMNI_PORT: "8001"
-      OMNI_REAL_MODEL: "1"
       HF_HOME: "/root/.cache/huggingface"
     volumes:
       - omni-weights:/app/weights      # ~1 GB OmniParser weights (downloaded once)

@@ -44,8 +44,7 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN python3.12 scripts/setup_vendor.py && chmod +x /usr/local/bin/entrypoint.sh
 
 ENV OMNI_HOST=0.0.0.0 \
-    OMNI_PORT=8001 \
-    OMNI_REAL_MODEL=1
+    OMNI_PORT=8001
 
 EXPOSE 8001
 # Generous start-period: a fresh-volume first boot downloads ~1 GB of weights +

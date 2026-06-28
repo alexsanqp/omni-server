@@ -63,7 +63,7 @@ packages = ["omni_server"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["vendor", ".venv", "weights"]
+extend-exclude = ["vendor", ".venv", "weights", ".hfcache"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "B", "UP", "RUF", "S", "T20"]

@@ -36,13 +36,13 @@ class ParseResponse(BaseModel):
     som_image_b64: str | None = Field(
         default=None,
         description="Base64 PNG of the screenshot with numbered SoM boxes overlaid. "
-        "Designed for VLM consumption (Set-of-Marks prompting). Real inference always "
-        "returns a PNG (the unannotated frame when nothing is detected); null only in "
-        "skeleton mode.",
+        "Designed for VLM consumption (Set-of-Marks prompting). The pipeline returns a "
+        "PNG even when nothing is detected (the unannotated frame); null is reserved for "
+        "a pipeline that opts out.",
     )
 
 
 class HealthResponse(BaseModel):
     status: str  # "ok" | "loading" | "error"
-    phase: str  # "1-skeleton" | "2-inference"
+    phase: str = "2-inference"  # retained for wire-contract back-compat
     detail: str | None = None
