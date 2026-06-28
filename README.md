@@ -88,8 +88,10 @@ persistent dir to cache them across restarts. Subsequent starts are offline.
 
 ## Configuration
 
-All settings are env-driven (`omni_server/config.py`); see `.env.example`. The
-most important ones:
+All settings are env-driven (`omni_server/config.py`). Copy `.env.example` to
+`.env` and edit it — the server auto-loads `.env` from its working directory, so
+a plain `uv run omni-server` picks up your config with no extra flags. The most
+important keys:
 
 | Env | Default | Meaning |
 |---|---|---|
